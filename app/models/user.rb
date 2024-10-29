@@ -64,7 +64,7 @@ class UserBase < ApplicationRecord
   devise :recoverable if Rails.configuration.x.settings.dig(:mail_settings) || Rails.application.credentials.mail_settings
 
   validates_presence_of :username, :nickname
-  validates_length_of :nickname, in: 1..12
+  validates_length_of :nickname, in: 1..20
   validates_length_of :username, in: 3..20
 
   mount_uploader :avatar, AvatarUploader
