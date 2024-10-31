@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2024_10_31_125151) do
+ActiveRecord::Schema[7.0].define(version: 2024_10_31_143652) do
   create_table "active_admin_comments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "namespace"
     t.text "body", size: :medium
@@ -154,8 +154,10 @@ ActiveRecord::Schema[7.0].define(version: 2024_10_31_125151) do
     t.boolean "approved", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "team_id"
     t.index ["contest_id", "approved"], name: "index_contest_registrations_on_contest_id_and_approved"
     t.index ["contest_id", "user_id"], name: "index_contest_registrations_on_contest_id_and_user_id", unique: true
+    t.index ["team_id"], name: "index_contest_registrations_on_team_id"
     t.index ["user_id", "approved"], name: "index_contest_registrations_on_user_id_and_approved"
   end
 
@@ -442,6 +444,7 @@ ActiveRecord::Schema[7.0].define(version: 2024_10_31_125151) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "announcements", "contests"
   add_foreign_key "ban_compilers", "compilers"
+  add_foreign_key "contest_registrations", "teams"
   add_foreign_key "problems", "compilers", column: "specjudge_compiler_id"
   add_foreign_key "problems", "compilers", column: "summary_compiler_id"
   add_foreign_key "submission_subtask_results", "submissions"
