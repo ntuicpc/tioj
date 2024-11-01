@@ -111,6 +111,8 @@ class User < UserBase
 
   extend FriendlyId
   friendly_id :username
+
+  has_and_belongs_to_many :teams
 end
 
 class ContestUser < UserBase
