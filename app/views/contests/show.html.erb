@@ -123,6 +123,17 @@
     <div class="panel-body">
       <% if @contest.is_started? || current_user&.admin? %>
         <% @tasks.each_with_index do |task, index| %>
+          <% if user_signed_in? %>
+            <% status = @problem_status[task.id] %>
+            <% if status.nil? %>
+              <span class="text-muted glyphicon glyphicon-minus"></span>
+            <% elsif status %>
+              <span class="text-success glyphicon glyphicon-ok"></span>
+            <% else %>
+              <span class="text-danger glyphicon glyphicon-thumbs-down"></span>
+            <% end %>
+          <% end %>
+
           <%= link_to (problem_index_text(index) + ' ' + task.id.to_s + '. ' + task.name), contest_adaptive_polymorphic_path([task]) %>
           <br>
         <% end %>

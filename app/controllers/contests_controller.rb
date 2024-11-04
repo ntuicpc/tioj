@@ -244,6 +244,28 @@ class ContestsController < ApplicationController
 
   def set_tasks
     @tasks = @contest.contest_problem_joints.order("id ASC").includes(:problem).map{|e| e.problem}
+
+    user_ids = []
+    if user_signed_in?
+      user_ids = [current_user.id]
+      registration = @contest.find_registration(current_user)
+      if registration&.team
+        registered_members = @contest.contest_registrations.where(team: registration.team).select(:user_id).map(&:user_id)
+        user_ids += registered_members
+      end
+    end
+    @problem_status = @contest.submissions.where(user_id: user_ids).group_by(&:problem_id) \
+      .map{|problem_id, submissions|
+        # TODO maybe handle type_ioi? and type_ioi_new?
+        # nil means no submission
+        # false means tried but in vain
+        # true means accepted
+        if submissions.empty?
+          [problem_id, nil]
+        else
+          [problem_id, submissions.any? {|s| s.result == "AC"}]
+        end
+      }.to_h
   end
 
   def tasks_valid?
