@@ -23,13 +23,12 @@ class FetchChannel < ApplicationCable::Channel
     if data[:message]
       update_hash[:message] = data[:message]
     end
-    v2i = ApplicationController.v2i
-    update_hash[:result] = ApplicationController.i2v[v2i.fetch(data[:verdict], v2i['JE'])]
+    update_hash[:result] = ApplicationController.judge_verdict.include?(data[:verdict]) ? data[:verdict] : 'JE'
     if submission.problem.summary_custom?
       update_hash[:score] = int_to_score(data[:score])
       update_hash[:total_time] = (BigDecimal(data[:total_time]) / 1000).round(0)
       update_hash[:total_memory] = data[:total_memory]
-    elsif ['JE', 'ER', 'CE', 'CLE'].include? update_hash[:result]
+    elsif ['JE', 'JCE', 'CE', 'CLE'].include? update_hash[:result]
       update_hash[:score] = 0
       update_hash[:total_time] = 0
       update_hash[:total_memory] = 0
@@ -38,7 +37,7 @@ class FetchChannel < ApplicationCable::Channel
       update_hash[:total_time] = tds.map{|i| i.time}.sum.round(0)
       update_hash[:total_memory] = tds.map{|i| i.rss}.max || 0
     end
-    submission.with_lock do
+    Submission.with_advisory_lock("#{submission.id}") do
       submission.update(**update_hash)
     end
     ActionCable.server.broadcast("submission_#{submission.id}_overall", update_hash.merge({id: submission.id}))
@@ -59,15 +58,11 @@ class FetchChannel < ApplicationCable::Channel
       submission = Submission.where(result: "queued", proxyjudge_type: :none).order(priority: :desc, id: :asc).first
       flag = false
       if submission
-        retry_op(3) do |is_first|
-          submission.reload if not is_first
-          submission.with_lock do
-            if submission.result == "received"
-              if i != n_retry
-                flag = true
-                next # breaks with_lock
-              end
-              return
+        Submission.with_advisory_lock("#{submission.id}") do
+          if submission.result != "queued"
+            if i != n_retry
+              flag = true
+              next # breaks with_lock
             end
             submission.update(result: "received")
           end
@@ -116,6 +111,7 @@ class FetchChannel < ApplicationCable::Channel
         problem_prog_code: problem.problem_prog_code || "",
         judge_between_stages: problem.judge_between_stages,
         judge_abnormally_terminated: problem.judge_abnormally_terminated,
+        judge_re_as_wa: problem.judge_re_as_wa,
         default_scoring_args: ApplicationController.shellsplit_safe(problem.default_scoring_args),
       },
       td: problem.testdata.map.with_index { |t, index|
@@ -167,20 +163,18 @@ class FetchChannel < ApplicationCable::Channel
     }
     subtask_scores = nil
     update_hash = nil
-    submission.with_lock do
-      # This insert needs to be protected because simultaneous inserts
-      #  can cause deadlock because of gap locks
-      SubmissionTestdataResult.import(results, on_duplicate_key_update: [:result, :time, :vss, :rss, :score, :message_type, :message])
-      return if not ['Validating', 'received'].include?(submission.result)
-      if submission.problem.summary_none?
-        subtask_scores = submission.calc_subtask_result
-        score = subtask_scores.sum{|x| x[:score]}
-        max_score = BigDecimal('1e+12')
-        score = score.clamp(-max_score, max_score).round(6)
-        update_hash = {score: score}
-      else
-        update_hash = {}
-      end
+    SubmissionTestdataResult.import(results, on_duplicate_key_update: [:result, :time, :vss, :rss, :score, :message_type, :message])
+    return if not ['Validating', 'received'].include?(submission.result)
+    if submission.problem.summary_none?
+      subtask_scores = submission.calc_subtask_result
+      score = subtask_scores.sum{|x| x[:score]}
+      max_score = BigDecimal('1e+12')
+      score = score.clamp(-max_score, max_score).round(6)
+      update_hash = {score: score}
+    else
+      update_hash = {}
+    end
+    Submission.with_advisory_lock("#{submission.id}") do
       submission.update_self_with_subtask_result(update_hash, subtask_scores)
     end
     ActionCable.server.broadcast("submission_#{submission.id}_subtasks", {subtask_scores: subtask_scores})

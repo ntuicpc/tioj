@@ -35,9 +35,10 @@
 #  problem_prog_compiler_id    :bigint
 #  problem_prog_code           :text(65535)
 #  problem_prog_stage_list     :string(255)      default(""), not null
-#  judge_abnormally_terminated :boolean          default(FALSE), not null
 #  proxyjudge_type             :integer          default("none"), not null
 #  proxyjudge_args             :string(255)
+#  judge_abnormally_terminated :boolean          default(FALSE), not null
+#  judge_re_as_wa              :boolean          default(FALSE), not null
 #
 # Indexes
 #
