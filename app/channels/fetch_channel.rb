@@ -1,21 +1,27 @@
 class FetchChannel < ApplicationCable::Channel
   def subscribed
+    return reject unless judge_server
+
     stream_from "fetch_#{judge_server.id}"
     stream_from 'fetch'
   end
 
   def td_result(data)
+    return unless authorized_judge_server?
+
     data = data.deep_symbolize_keys
     submission = Submission.find(data[:submission_id])
     update_td_results(data[:results], submission)
   end
 
   def submission_result(data)
+    return unless authorized_judge_server?
+
     data = data.deep_symbolize_keys
     submission = Submission.find(data[:submission_id])
     if ['Validating', 'queued'].include? data[:verdict]
       submission.update(result: data[:verdict])
-      ActionCable.server.broadcast("submission_#{submission.id}_overall", {id: submission.id, result: data[:verdict]})
+      broadcast_overall(submission, {id: submission.id, result: data[:verdict]})
       return
     end
     update_td_results(data[:td_results], submission) if data[:td_results]
@@ -40,11 +46,13 @@ class FetchChannel < ApplicationCable::Channel
     Submission.with_advisory_lock("#{submission.id}") do
       submission.update(**update_hash)
     end
-    ActionCable.server.broadcast("submission_#{submission.id}_overall", update_hash.merge({id: submission.id}))
+    broadcast_overall(submission, update_hash.merge({id: submission.id}))
     notify_contest_channel(submission.contest_id, submission.user_id)
   end
 
   def report_queued(data)
+    return unless authorized_judge_server?
+
     data = data.deep_symbolize_keys
     # judge client will report every 10 seconds if has submission queued; 30 seconds otherwise
     Submission.where(id: data[:submission_ids]).update_all(updated_at: Time.now)
@@ -53,6 +61,8 @@ class FetchChannel < ApplicationCable::Channel
   end
 
   def fetch_submission(data)
+    return unless authorized_judge_server?
+
     n_retry = 5
     for i in 1..n_retry
       submission = Submission.where(result: "queued", proxyjudge_type: :none).order(priority: :desc, id: :asc).first
@@ -135,13 +145,23 @@ class FetchChannel < ApplicationCable::Channel
       },
     }
     ActionCable.server.broadcast("fetch_#{judge_server.id}", {type: 'submission', data: data})
-    ActionCable.server.broadcast("submission_#{submission.id}_overall", {result: 'received', id: submission.id})
+    broadcast_overall(submission, {result: 'received', id: submission.id})
   end
 
   def unsubscribed
   end
 
   private
+
+  # A failed subscription callback can leave an Action Cable channel object in the
+  # connection's subscription map, so each privileged RPC also verifies the
+  # connection identity before changing state.
+  def authorized_judge_server?
+    return true if judge_server
+
+    reject
+    false
+  end
 
   def int_to_score(x)
     (x / BigDecimal('1e+6')).round(6).clamp(BigDecimal('-1e+6'), BigDecimal('1e+6'))
@@ -179,7 +199,13 @@ class FetchChannel < ApplicationCable::Channel
     end
     ActionCable.server.broadcast("submission_#{submission.id}_subtasks", {subtask_scores: subtask_scores})
     ActionCable.server.broadcast("submission_#{submission.id}_testdata", {testdata: results})
-    ActionCable.server.broadcast("submission_#{submission.id}_overall", update_hash.merge({result: submission.result, id: submission.id}))
+    broadcast_overall(submission, update_hash.merge({result: submission.result, id: submission.id}))
+  end
+
+  def broadcast_overall(submission, msg)
+    msg_nojce = msg[:result] == 'JCE' ? msg.except(:message) : msg
+    ActionCable.server.broadcast("submission_#{submission.id}_overall", msg)
+    ActionCable.server.broadcast("submission_#{submission.id}_overall_nojce", msg_nojce)
   end
 
   def retry_op(retry_times=4, interval=0.3)
