@@ -21,7 +21,7 @@ class SubmissionsController < ApplicationController
   def rejudge
     @submission.submission_testdata_results.delete_all
     priority = @submission.contest_id ? Submission::PRIORITY[:rejudge_contest] : Submission::PRIORITY[:rejudge_normal]
-    @submission.update_self_with_subtask_result({result: "queued", priority: priority, score: 0, total_time: nil, total_memory: nil, message: nil})
+    @submission.update_self_with_subtask_result({result: "waiting", priority: priority, score: 0, total_time: nil, total_memory: nil, message: nil})
     ActionCable.server.broadcast('fetch', {type: 'notify', action: 'rejudge', submission_id: @submission.id})
     helpers.notify_contest_channel(@submission.contest_id, @submission.user_id)
     redirect_back fallback_location: root_path
@@ -181,14 +181,20 @@ class SubmissionsController < ApplicationController
         @submissions = @submissions.joins(:problem).where(problem: {visible_state: :public})
       end
     end
-    @submissions = @submissions.where(problem_id: params[:filter_problem]) if not params[:filter_problem].blank?
+    @submissions = @submissions.where(problem_id: params[:filter_problem]) if params[:filter_problem].present?
     if not params[:filter_username].blank?
       usr_clause = UserBase.select(:id).where('username LIKE ?', params[:filter_username]).to_sql
       @submissions = @submissions.where("user_id IN (#{usr_clause})")
     end
-    @submissions = @submissions.where(user_id: params[:filter_user_id]) if not params[:filter_user_id].blank?
-    @submissions = @submissions.where(result: params[:filter_status]) if not params[:filter_status].blank?
-    @submissions = @submissions.where(compiler_id: params[:filter_compiler].map{|x| x.to_i}) if not params[:filter_compiler].blank?
+    @submissions = @submissions.where(user_id: params[:filter_user_id]) if params[:filter_user_id].present?
+
+    filter_status = params[:filter_status]
+    filter_status = filter_status.values if filter_status.is_a?(ActionController::Parameters)
+    @submissions = @submissions.where(result: filter_status) if filter_status.present?
+
+    filter_compiler = params[:filter_compiler]
+    filter_compiler = filter_compiler.values if filter_compiler.is_a?(ActionController::Parameters)
+    @submissions = @submissions.where(compiler_id: filter_compiler.map(&:to_i)) if filter_compiler.present?
   end
 
   def set_submission

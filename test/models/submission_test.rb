@@ -2,21 +2,21 @@
 #
 # Table name: submissions
 #
-#  id               :bigint           not null, primary key
-#  result           :string(255)      default("queued")
-#  score            :decimal(18, 6)   default(0.0)
-#  created_at       :datetime
-#  updated_at       :datetime
-#  problem_id       :bigint           default(0)
-#  user_id          :bigint           default(0)
-#  contest_id       :bigint
-#  total_time       :bigint
-#  total_memory     :bigint
-#  message          :text(16777215)
-#  compiler_id      :bigint           not null
-#  code_length      :bigint           default(0), not null
-#  code_content_id  :bigint           not null
-#  priority         :integer          default(20), not null
+#  id              :bigint           not null, primary key
+#  result          :string(255)      default("waiting")
+#  score           :decimal(18, 6)   default(0.0)
+#  created_at      :datetime
+#  updated_at      :datetime
+#  problem_id      :bigint           default(0)
+#  user_id         :bigint           default(0)
+#  contest_id      :bigint
+#  total_time      :bigint
+#  total_memory    :bigint
+#  message         :text(16777215)
+#  compiler_id     :bigint           not null
+#  code_length     :bigint           default(0), not null
+#  code_content_id :bigint           not null
+#  priority        :integer          default(20), not null
 #  proxyjudge_type  :integer          default("none"), not null
 #  proxyjudge_nonce :string(255)
 #  proxyjudge_id    :string(255)
